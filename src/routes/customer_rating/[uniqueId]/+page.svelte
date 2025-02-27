@@ -19,6 +19,8 @@
   }
 
   function handleRating(value) {
+    if (isLoading) return;
+    
     rating = value;
     showFeedbackForm = rating > 0 && rating <= 3;
     
@@ -27,7 +29,7 @@
       const redirectUrl = company?.googleMapLink || "https://google.com";
       setTimeout(() => {
         window.location.href = redirectUrl;
-      }, 1000);
+      }, 700);
     }
   }
 
@@ -62,8 +64,15 @@
 
   {#if isLoading}
     <div class="card loading-card">
-      <div class="loading-spinner"></div>
-      <p class="loading-text">Loading...</p>
+      <div class="loader-container">
+        <div class="pulse-loader">
+          <div class="pulse-dot"></div>
+          <div class="pulse-dot"></div>
+          <div class="pulse-dot"></div>
+        </div>
+        <p class="loader-text">Loading your feedback form...</p>
+        <p class="loader-subtext">Please wait while we prepare everything</p>
+      </div>
     </div>
   {:else if !data.user}
     <div class="error">
@@ -90,6 +99,8 @@
                 class="star-btn" 
                 on:click={() => handleRating(i + 1)}
                 class:active={i < rating}
+                class:disabled={isLoading}
+                disabled={isLoading}
               >★</button>
             {/each}
           </div>
@@ -131,7 +142,7 @@
 </main>
 
 <style>
-
+/* Loading styles */
 .loading-card {
   display: flex;
   flex-direction: column;
@@ -141,28 +152,65 @@
   min-height: 200px;
 }
 
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(139, 92, 246, 0.1);
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.pulse-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.pulse-dot {
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  border-top-color: #8b5cf6;
-  animation: spin 1s linear infinite;
+  background-color: #8b5cf6;
+  animation: pulse 1.5s infinite ease-in-out;
 }
 
-.loading-text {
-  margin-top: 1rem;
-  color: #6b7280;
-  font-size: 0.9rem;
+.pulse-dot:nth-child(2) {
+  animation-delay: 0.2s;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+.pulse-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
   }
 }
 
+.loader-text {
+  font-size: 16px;
+  color: #6b7280;
+  font-weight: 500;
+  text-align: center;
+  margin: 0;
+}
 
+.loader-subtext {
+  font-size: 14px;
+  color: #888;
+  text-align: center;
+  margin: 4px 0 0 0;
+}
+
+/* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -178,6 +226,7 @@
   50% { transform: scale(1.2); }
 }
 
+/* General styles */
 :global(body) {
   margin: 0;
   padding: 0;
@@ -288,7 +337,7 @@
   padding: 0.2rem;
 }
 
-.star-btn:hover {
+.star-btn:hover:not(:disabled) {
   transform: scale(1.1);
   color: #fbbf24;
 }
@@ -296,6 +345,11 @@
 .star-btn.active {
   color: #fbbf24;
   animation: starBounce 1s ease infinite;
+}
+
+.star-btn.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .feedback-form {
