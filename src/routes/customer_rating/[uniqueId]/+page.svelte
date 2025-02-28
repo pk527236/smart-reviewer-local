@@ -15,6 +15,8 @@
     if (data.user) {
       company = data.user;
       isLoading = false;
+    } else {
+      isLoading = true;
     }
   }
 

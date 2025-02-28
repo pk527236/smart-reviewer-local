@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import path from 'path';
 
 export async function load({ params }) {
+    // await new Promise(resolve => setTimeout(resolve, 10000));
     let db;
     try {
         // Use an absolute path to your database file
