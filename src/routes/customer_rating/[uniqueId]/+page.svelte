@@ -1,24 +1,33 @@
 <script>
-  /** @type {import('./$types').PageData} */
+   import { onMount } from 'svelte';
+
   export let data;
   let rating = 0;
   let showFeedbackForm = false;
   let showThankYou = false;
   let feedbackText = '';
   let customerName = '';
-  let company = null;
   let showToast = false;
   let isLoading = true;
+  let company;
+
+  
+    
+  onMount(() => {
+    isLoading = false;
+    company = data.user;
+  });
+  // let company = data.user;
 
   // Initialize company data once it's available
-  $: {
-    if (data.user) {
-      company = data.user;
-      isLoading = false;
-    } else {
-      isLoading = true;
-    }
-  }
+  // $: {
+  //   if (data.user) {
+  //     company = data.user;
+  //     isLoading = false;
+  //   } else {
+  //     isLoading = true;
+  //   }
+  // }
 
   function handleRating(value) {
     if (isLoading) return;
@@ -72,7 +81,7 @@
           <div class="pulse-dot"></div>
           <div class="pulse-dot"></div>
         </div>
-        <p class="loader-text">Loading your feedback form...</p>
+        <p class="loader-text">Gathering the stars...</p>
         <p class="loader-subtext">Please wait while we prepare everything</p>
       </div>
     </div>
