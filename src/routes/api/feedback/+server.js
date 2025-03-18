@@ -1,26 +1,25 @@
 // src/routes/api/feedback/+server.js
-import Database from 'better-sqlite3';
-
-const db = new Database('database.sqlite', { verbose: console.log });
+import { query } from '$lib/server/db.js';
 
 export async function POST({ request }) {
   const data = await request.json();
   
   try {
-    const stmt = db.prepare(`
+    const queryText = `
       INSERT INTO feedback (unique_id, customer_name, rating, feedback_text)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    stmt.run(
+      VALUES ($1, $2, $3, $4)
+    `;
+    
+    await query(queryText, [
       data.uniqueId,
       data.customerName,
       data.rating,
       data.feedback
-    );
-
+    ]);
+    
     return new Response(JSON.stringify({ success: true }));
   } catch (error) {
+    console.error('Feedback submission error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500 }

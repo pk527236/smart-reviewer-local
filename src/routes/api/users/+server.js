@@ -1,68 +1,63 @@
-import Database from 'better-sqlite3';
-
-// Create a single database connection to be reused
-const db = new Database('database.sqlite', { verbose: console.log });
-
+import { query, withTransaction } from '$lib/server/db.js';
 
 // Add a new user
 export async function POST({ request }) {
   const userData = await request.json();
   
   try {
-    // Start a transaction
-    db.prepare('BEGIN').run();
-
-    try {
-      // First insert the user
-      const userStmt = db.prepare(`
+    // Use transaction helper function
+    return await withTransaction(async (client) => {
+      // First, get the next unique_id
+      const uniqueIdQuery = `
+        SELECT COALESCE(MAX(unique_id), 1000) + 1 AS next_id FROM users
+      `;
+      const uniqueIdResult = await client.query(uniqueIdQuery);
+      const uniqueId = uniqueIdResult.rows[0].next_id;
+      
+      // Insert the user
+      const userQuery = `
         INSERT INTO users (
           unique_id, owner_name, property_name, property_address, 
           google_map_link, contact_number, custom_feedback_message
         )
-        VALUES (
-          (SELECT COALESCE(MAX(unique_id), 1000) + 1 FROM users), 
-          ?, ?, ?, ?, ?, ?
-        )
-      `);
-
-      const userResult = userStmt.run(
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+      `;
+      
+      const userResult = await client.query(userQuery, [
+        uniqueId,
         userData.ownerName,
         userData.propertyName,
         userData.propertyAddress,
         userData.googleMapLink,
         userData.contactNumber,
         userData.customFeedbackMessage
-      );
-
-      // Then insert the business auth data
-      const authStmt = db.prepare(`
+      ]);
+      
+      const userId = userResult.rows[0].id;
+      
+      // Insert the business auth data
+      const authQuery = `
         INSERT INTO business_auth (
           business_id, username, password_hash
         )
-        VALUES (?, ?, ?)
-      `);
-
-      authStmt.run(
-        userResult.lastInsertRowid,
+        VALUES ($1, $2, $3)
+      `;
+      
+      await client.query(authQuery, [
+        userId,
         userData.username,
         userData.password  // This is already hashed from the frontend
-      );
-
-      // Commit the transaction
-      db.prepare('COMMIT').run();
-
+      ]);
+      
       return new Response(
         JSON.stringify({ 
           success: true, 
-          id: userResult.lastInsertRowid 
+          id: userId 
         }),
         { headers: { 'Content-Type': 'application/json' } }
       );
-    } catch (error) {
-      // Rollback on error
-      db.prepare('ROLLBACK').run();
-      throw error;
-    }
+    });
   } catch (error) {
     console.error('Error inserting user:', error);
     return new Response(
@@ -72,11 +67,10 @@ export async function POST({ request }) {
   }
 }
 
-
 // Fetch all users with review counts
 export async function GET() {
   try {
-    const stmt = db.prepare(`
+    const queryText = `
       SELECT 
         users.*,
         business_auth.username,
@@ -84,11 +78,13 @@ export async function GET() {
       FROM users
       LEFT JOIN business_auth ON users.id = business_auth.business_id
       LEFT JOIN feedback ON users.unique_id = feedback.unique_id
-      GROUP BY users.id
+      GROUP BY users.id, business_auth.username
       ORDER BY users.id DESC
-    `);
-
-    const users = stmt.all().map(user => ({
+    `;
+    
+    const result = await query(queryText);
+    
+    const users = result.rows.map(user => ({
       id: user.id,
       uniqueId: user.unique_id,
       ownerName: user.owner_name,
@@ -100,7 +96,7 @@ export async function GET() {
       username: user.username,
       reviewCount: user.review_count
     }));
-
+    
     return new Response(JSON.stringify(users),
       { headers: { 'Content-Type': 'application/json' } }
     );
@@ -118,50 +114,70 @@ export async function PUT({ request }) {
   const userData = await request.json();
   
   try {
-    db.prepare('BEGIN').run();
-
-    // Update users table
-    const userStmt = db.prepare(`
-      UPDATE users
-      SET owner_name = ?, property_name = ?, property_address = ?,
-          google_map_link = ?, contact_number = ?, custom_feedback_message = ?
-      WHERE id = ?
-    `);
-
-    userStmt.run(
-      userData.ownerName,
-      userData.propertyName,
-      userData.propertyAddress,
-      userData.googleMapLink,
-      userData.contactNumber,
-      userData.customFeedbackMessage,
-      userData.id
-    );
-
-    // Update business_auth if password or username changed
-    if (userData.username || userData.password) {
-      const authStmt = db.prepare(`
-        UPDATE business_auth 
-        SET username = COALESCE(?, username),
-            password_hash = COALESCE(?, password_hash)
-        WHERE business_id = ?
-      `);
-
-      authStmt.run(
-        userData.username || null,
-        userData.password || null,
+    return await withTransaction(async (client) => {
+      // Update users table
+      const userQuery = `
+        UPDATE users
+        SET owner_name = $1, property_name = $2, property_address = $3,
+            google_map_link = $4, contact_number = $5, custom_feedback_message = $6
+        WHERE id = $7
+      `;
+      
+      await client.query(userQuery, [
+        userData.ownerName,
+        userData.propertyName,
+        userData.propertyAddress,
+        userData.googleMapLink,
+        userData.contactNumber,
+        userData.customFeedbackMessage,
         userData.id
+      ]);
+      
+      // Update business_auth if password or username changed
+      if (userData.username || userData.password) {
+        // In PostgreSQL, we need to handle this differently than SQLite's COALESCE approach
+        // since we can't mix parameters and column references in COALESCE
+        
+        if (userData.username && userData.password) {
+          const authQuery = `
+            UPDATE business_auth 
+            SET username = $1, password_hash = $2
+            WHERE business_id = $3
+          `;
+          await client.query(authQuery, [
+            userData.username,
+            userData.password,
+            userData.id
+          ]);
+        } else if (userData.username) {
+          const authQuery = `
+            UPDATE business_auth 
+            SET username = $1
+            WHERE business_id = $2
+          `;
+          await client.query(authQuery, [
+            userData.username,
+            userData.id
+          ]);
+        } else if (userData.password) {
+          const authQuery = `
+            UPDATE business_auth 
+            SET password_hash = $1
+            WHERE business_id = $2
+          `;
+          await client.query(authQuery, [
+            userData.password,
+            userData.id
+          ]);
+        }
+      }
+      
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { 'Content-Type': 'application/json' } }
       );
-    }
-
-    db.prepare('COMMIT').run();
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    });
   } catch (error) {
-    db.prepare('ROLLBACK').run();
     console.error('Error updating user:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }), 
@@ -173,32 +189,32 @@ export async function PUT({ request }) {
 // Delete a user
 export async function DELETE({ request }) {
   const { id } = await request.json();
-
+  
   try {
-    db.prepare('BEGIN').run();
-
-    const user = db.prepare('SELECT unique_id FROM users WHERE id = ?').get(id);
-    
-    if (user) {
-      // Delete business auth entry
-      db.prepare('DELETE FROM business_auth WHERE business_id = ?').run(id);
+    return await withTransaction(async (client) => {
+      // Get the unique_id first
+      const userQuery = 'SELECT unique_id FROM users WHERE id = $1';
+      const userResult = await client.query(userQuery, [id]);
       
-      // Delete feedback entries
-      db.prepare('DELETE FROM feedback WHERE unique_id = ?').run(user.unique_id);
+      if (userResult.rows.length > 0) {
+        const uniqueId = userResult.rows[0].unique_id;
+        
+        // Delete business auth entry
+        await client.query('DELETE FROM business_auth WHERE business_id = $1', [id]);
+        
+        // Delete feedback entries
+        await client.query('DELETE FROM feedback WHERE unique_id = $1', [uniqueId]);
+        
+        // Delete user
+        await client.query('DELETE FROM users WHERE id = $1', [id]);
+      }
       
-      // Delete user
-      db.prepare('DELETE FROM users WHERE id = ?').run(id);
-    }
-
-    db.prepare('COMMIT').run();
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    });
   } catch (error) {
-    db.prepare('ROLLBACK').run();
-    
     console.error('Error deleting user:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }), 

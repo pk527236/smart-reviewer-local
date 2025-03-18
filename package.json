@@ -6,7 +6,8 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
-		"preview": "vite preview"
+		"preview": "vite preview",
+		"check-data": "node scripts/check-data.js"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^3.0.0",
@@ -16,11 +17,13 @@
 		"vite": "^6.0.0"
 	},
 	"dependencies": {
+		"@databases/pg": "^5.5.0",
 		"bcrypt": "^5.1.1",
 		"bcryptjs": "^2.4.3",
-		"better-sqlite3": "^11.7.0",
 		"chart.js": "^4.4.7",
+		"dotenv": "^16.4.7",
 		"jsonwebtoken": "^9.0.2",
+		"pg": "^8.11.0",
 		"qrcode": "^1.5.4",
 		"sqlite3": "^5.1.7"
 	}
