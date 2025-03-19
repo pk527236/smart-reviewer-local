@@ -34,4 +34,4 @@ jobs:
           docker build -t smartreviewer-fe .
 
           # Run the new container
-          docker run -d --restart always --env-file .env -p 80:5173 --name smartreviewer-fe smartreviewer-fe
+          docker run -d --restart always --env-file /home/ubuntu/.env -p 80:5173 --name smartreviewer-fe smartreviewer-fe
