@@ -8,24 +8,24 @@ export async function POST({ request }) {
     // Use transaction helper function
     return await withTransaction(async (client) => {
       // First, get the next unique_id
-      const uniqueIdQuery = `
-        SELECT COALESCE(MAX(unique_id), 1000) + 1 AS next_id FROM users
-      `;
-      const uniqueIdResult = await client.query(uniqueIdQuery);
-      const uniqueId = uniqueIdResult.rows[0].next_id;
+      // const uniqueIdQuery = `
+      //   SELECT COALESCE(MAX(unique_id), 1000) + 1 AS next_id FROM users
+      // `;
+      // const uniqueIdResult = await client.query(uniqueIdQuery);
+      // const uniqueId = uniqueIdResult.rows[0].next_id;
       
       // Insert the user
       const userQuery = `
         INSERT INTO users (
-          unique_id, owner_name, property_name, property_address, 
+          owner_name, property_name, property_address, 
           google_map_link, contact_number, custom_feedback_message
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
       `;
       
       const userResult = await client.query(userQuery, [
-        uniqueId,
+        // uniqueId,
         userData.ownerName,
         userData.propertyName,
         userData.propertyAddress,

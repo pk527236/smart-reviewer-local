@@ -22,7 +22,7 @@ async function initializeDatabase() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
-        unique_id INTEGER NOT NULL UNIQUE,
+        unique_id UUID DEFAULT gen_random_uuid() NOT NULL UNIQUE,
         owner_name VARCHAR(255),
         property_name VARCHAR(255),
         property_address TEXT,
@@ -34,7 +34,7 @@ async function initializeDatabase() {
       
       CREATE TABLE IF NOT EXISTS feedback (
         id SERIAL PRIMARY KEY,
-        unique_id INTEGER NOT NULL,
+        unique_id UUID NOT NULL,
         customer_name VARCHAR(255),
         rating INTEGER NOT NULL,
         feedback_text TEXT,
