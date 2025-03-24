@@ -3,7 +3,7 @@ name: Deploy Smart Reviewer to VM
 on:
   push:
     branches:
-      - main  # Change this if your deployment branch is different
+      - main
 
 jobs:
   deploy:
@@ -20,30 +20,35 @@ jobs:
         username: ${{ secrets.VM_USERNAME }}
         key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
         script: |
+          set -e  # Exit immediately if a command fails
+
           # Navigate to the application directory
           cd /home/ubuntu/smart-reviewer
 
-          # Configure Git to use GitHub token
-          git config --global credential.helper store
-          echo "https://${{ secrets.SMARTREVIEWER_REPO_ACCESS_TOKEN }}@github.com" > ~/.git-credentials
+          # Ensure GitHub authentication
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
+          git config --global credential.helper cache
+          echo "https://${{ secrets.SMARTREVIEWER_REPO_ACCESS_TOKEN }}@github.com" > ~/.git-credentials
 
-          # Pull the latest code from GitHub
+          # Pull latest code
           git pull origin main
 
-          # Stop and remove the existing container
+          # Stop and remove the old container (ignore errors if not exists)
           docker stop smartreviewer-fe || true
           docker rm smartreviewer-fe || true
 
-          # Remove old Docker images to save space
-          docker image prune -af
+          # Remove old images to prevent conflicts
+          docker image prune -af || true
 
-          # Enable BuildKit for better performance
-          export DOCKER_BUILDKIT=1
-          
+          # Ensure Buildx is installed
+          docker buildx version || (echo "Installing Buildx..." && apt update && apt install -y docker-buildx)
+
           # Build the new Docker image
           docker build -t smartreviewer-fe .
+
+          # Verify the image exists before running
+          docker images | grep smartreviewer-fe || (echo "Image build failed!" && exit 1)
 
           # Run the new container
           docker run -d --restart always --env-file /home/ubuntu/.env -p 80:5173 --name smartreviewer-fe smartreviewer-fe
