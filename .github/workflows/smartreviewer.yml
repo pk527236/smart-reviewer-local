@@ -37,7 +37,7 @@ jobs:
             git reset --hard HEAD
             git pull origin main
           else
-            git clone https://${{ secrets.SMARTREVIEWER_REPO_ACCESS_TOKEN }}@github.com/Monish212/smart-reviewer.git
+            git clone https://${{ secrets.SMARTREVIEWER_REPO_ACCESS_TOKEN }}@github.com/ExclcloudHQ/smart-reviewer.git
             cd smart-reviewer
           fi
 
