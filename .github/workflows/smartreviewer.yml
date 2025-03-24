@@ -23,13 +23,25 @@ jobs:
           # Navigate to the application directory
           cd /home/ubuntu/smart-reviewer
 
+          # Configure Git to use GitHub token
+          git config --global credential.helper store
+          echo "https://${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
           # Pull the latest code from GitHub
           git pull origin main
 
-          # Stop and remove existing container
+          # Stop and remove the existing container
           docker stop smartreviewer-fe || true
           docker rm smartreviewer-fe || true
 
+          # Remove old Docker images to save space
+          docker image prune -af
+
+          # Enable BuildKit for better performance
+          export DOCKER_BUILDKIT=1
+          
           # Build the new Docker image
           docker build -t smartreviewer-fe .
 
