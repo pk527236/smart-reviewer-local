@@ -25,9 +25,9 @@ jobs:
 
           # Authenticate Git with GITHUB_TOKEN
           git config --global credential.helper store
-          echo "https://${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
+          echo "https://${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
 
           # Pull the latest code
           git pull origin main
@@ -36,8 +36,12 @@ jobs:
           docker stop smartreviewer-fe || true
           docker rm smartreviewer-fe || true
 
+          # Install and use Buildx for Docker
+          sudo apt update && sudo apt install -y docker-buildx-plugin
+          docker buildx create --use
+
           # Build the new Docker image
-          docker build -t smartreviewer-fe .
+          docker buildx build --platform linux/amd64 -t smartreviewer-fe .
 
           # Run the new container
           docker run -d --restart always --env-file /home/ubuntu/.env -p 80:5173 --name smartreviewer-fe smartreviewer-fe
