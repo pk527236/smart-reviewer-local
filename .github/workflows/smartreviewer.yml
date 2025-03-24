@@ -23,25 +23,15 @@ jobs:
           # Navigate to the application directory
           cd /home/ubuntu/smart-reviewer
 
-          # Authenticate Git with GITHUB_TOKEN
-          git config --global credential.helper store
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          echo "https://${{ secrets.GITHUB_TOKEN }}@github.com" > ~/.git-credentials
-
-          # Pull the latest code
+          # Pull the latest code from GitHub
           git pull origin main
 
           # Stop and remove existing container
           docker stop smartreviewer-fe || true
           docker rm smartreviewer-fe || true
 
-          # Install and use Buildx for Docker
-          sudo apt update && sudo apt install -y docker-buildx-plugin
-          docker buildx create --use
-
           # Build the new Docker image
-          docker buildx build --platform linux/amd64 -t smartreviewer-fe .
+          docker build -t smartreviewer-fe .
 
           # Run the new container
           docker run -d --restart always --env-file /home/ubuntu/.env -p 80:5173 --name smartreviewer-fe smartreviewer-fe
