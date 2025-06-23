@@ -13,10 +13,21 @@
 
   
     
-  onMount(() => {
-    isLoading = false;
-    company = data.user;
-  });
+ onMount(async () => {
+  isLoading = false;
+  company = data.user;
+  
+  // Track QR scan analytics
+  try {
+    await fetch('/api/analytics/qr-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uniqueId: company.uniqueId })
+    });
+  } catch (error) {
+    console.error('Failed to track QR scan:', error);
+  }
+});
   // let company = data.user;
 
   // Initialize company data once it's available
@@ -29,20 +40,30 @@
   //   }
   // }
 
-  function handleRating(value) {
-    if (isLoading) return;
+ function handleRating(value) {
+  if (isLoading) return;
+  
+  rating = value;
+  showFeedbackForm = rating > 0 && rating <= 3;
+  
+  if (rating > 3) {
+    showToast = true;
+    const redirectUrl = company?.googleMapLink || "https://google.com";
     
-    rating = value;
-    showFeedbackForm = rating > 0 && rating <= 3;
+    // Track Google redirect before redirecting
+    fetch('/api/analytics/google-redirect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uniqueId: company.uniqueId })
+    }).catch(error => {
+      console.error('Failed to track Google redirect:', error);
+    });
     
-    if (rating > 3) {
-      showToast = true;
-      const redirectUrl = company?.googleMapLink || "https://google.com";
-      setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 700);
-    }
+    setTimeout(() => {
+      window.location.href = redirectUrl;
+    }, 700);
   }
+}
 
   async function handleSubmit() {
     try {

@@ -1,13 +1,16 @@
-// Import the PostgreSQL client library
-import { Pool } from 'pg';
+// Load environment variables from .env file
+import 'dotenv/config'; // This auto-loads the .env
 
-// Create a connection pool
+import pkg from 'pg';
+const { Pool } = pkg;
+
+// Create a connection pool using environment variables
 const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'database_name', // Update with your database name
-  password: 'password',      // Update with your password
-  port: 5432,                // Default PostgreSQL port
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: Number(process.env.PGPORT), // Ensure it's treated as number
 });
 
 // Function to initialize the database
@@ -15,10 +18,8 @@ async function initializeDatabase() {
   const client = await pool.connect();
   
   try {
-    // Start a transaction
     await client.query('BEGIN');
-    
-    // Create tables with PostgreSQL syntax
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -31,7 +32,7 @@ async function initializeDatabase() {
         custom_feedback_message TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      
+
       CREATE TABLE IF NOT EXISTS feedback (
         id SERIAL PRIMARY KEY,
         unique_id UUID NOT NULL,
@@ -41,8 +42,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (unique_id) REFERENCES users(unique_id)
       );
-      
-      -- Business authentication table with first_login column
+
       CREATE TABLE IF NOT EXISTS business_auth (
         id SERIAL PRIMARY KEY,
         business_id INTEGER NOT NULL UNIQUE,
@@ -52,25 +52,33 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (business_id) REFERENCES users(id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS daily_analytics (
+       id SERIAL PRIMARY KEY,
+       unique_id UUID NOT NULL,
+       analytics_date DATE NOT NULL DEFAULT CURRENT_DATE,
+       qr_scans INTEGER DEFAULT 0,
+       google_redirects INTEGER DEFAULT 0,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY (unique_id) REFERENCES users(unique_id),
+       UNIQUE(unique_id, analytics_date)
+       );
     `);
 
-    // Create indexes - PostgreSQL has a slightly different syntax
     await client.query(`
-      -- Add indexes for performance
       CREATE INDEX IF NOT EXISTS idx_business_username ON business_auth(username);
       CREATE INDEX IF NOT EXISTS idx_business_id ON business_auth(business_id);
+      CREATE INDEX IF NOT EXISTS idx_daily_analytics_date ON daily_analytics(analytics_date);
+      CREATE INDEX IF NOT EXISTS idx_daily_analytics_unique_id ON daily_analytics(unique_id);
     `);
 
-    // Commit the transaction
     await client.query('COMMIT');
-    console.log('Database initialized successfully.');
+    console.log('✅ Database initialized successfully.');
   } catch (error) {
-    // If there's an error, roll back changes
     await client.query('ROLLBACK');
-    console.error('Error initializing database:', error);
+    console.error('❌ Error initializing database:', error);
     throw error;
   } finally {
-    // Release the client back to the pool
     client.release();
   }
 }
@@ -78,5 +86,5 @@ async function initializeDatabase() {
 // Run the initialization function
 initializeDatabase().catch(console.error);
 
-// Export the pool for use in other parts of the application
+// Export the pool for other modules to use
 export default pool;

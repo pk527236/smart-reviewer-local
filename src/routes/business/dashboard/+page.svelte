@@ -14,18 +14,37 @@
         date: new Date(review.created_at).toLocaleDateString()
     }));
 
-    let dailyReviewsData = [];
+    // Prepare data for all three charts
     const last30Days = new Array(30).fill(null).map((_, i) => {
         const date = new Date();
         date.setDate(date.getDate() - (29 - i));
         return date.toISOString().split('T')[0];
     });
 
-    dailyReviewsData = last30Days.map(date => {
+    // Daily Reviews Data
+    let dailyReviewsData = last30Days.map(date => {
         const found = data.dailyReviews.find(review => review.date === date);
         return {
             date: new Date(date).toLocaleDateString(),
             reviews: found ? found.count : 0
+        };
+    });
+
+    // Daily QR Scans Data
+    let dailyQRScansData = last30Days.map(date => {
+        const found = data.dailyQRScans.find(scan => scan.date === date);
+        return {
+            date: new Date(date).toLocaleDateString(),
+            scans: found ? found.count : 0
+        };
+    });
+
+    // Daily Google Redirects Data
+    let dailyGoogleRedirectsData = last30Days.map(date => {
+        const found = data.dailyGoogleRedirects.find(redirect => redirect.date === date);
+        return {
+            date: new Date(date).toLocaleDateString(),
+            redirects: found ? found.count : 0
         };
     });
 
@@ -35,9 +54,10 @@
         ? (reviews.reduce((acc, rev) => acc + rev.stars, 0) / reviews.length).toFixed(1)
         : 0;
 
-    let chartCanvas;
+    let chartCanvas, qrScansCanvas, googleRedirectsCanvas;
 
     onMount(() => {
+        // Reviews Chart
         const ctx = chartCanvas.getContext('2d');
         new Chart(ctx, {
             type: 'line',
@@ -48,6 +68,102 @@
                     data: dailyReviewsData.map(d => d.reviews),
                     borderColor: '#6366f1',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxTicksLimit: 7,
+                            maxRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+
+        // QR Scans Chart
+        const qrCtx = qrScansCanvas.getContext('2d');
+        new Chart(qrCtx, {
+            type: 'line',
+            data: {
+                labels: dailyQRScansData.map(d => d.date),
+                datasets: [{
+                    label: 'QR Code Scans',
+                    data: dailyQRScansData.map(d => d.scans),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxTicksLimit: 7,
+                            maxRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+
+        // Google Redirects Chart
+        const googleCtx = googleRedirectsCanvas.getContext('2d');
+        new Chart(googleCtx, {
+            type: 'line',
+            data: {
+                labels: dailyGoogleRedirectsData.map(d => d.date),
+                datasets: [{
+                    label: 'Google Map Redirects',
+                    data: dailyGoogleRedirectsData.map(d => d.redirects),
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
                     borderWidth: 2,
                     tension: 0.4,
                     fill: true
@@ -117,10 +233,26 @@
         </div>
     </div>
 
-    <div class="chart-card">
-        <h2>Review Trends</h2>
-        <div class="chart">
-            <canvas bind:this={chartCanvas}></canvas>
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h2>Review Trends</h2>
+            <div class="chart">
+                <canvas bind:this={chartCanvas}></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h2>QR Code Scans</h2>
+            <div class="chart">
+                <canvas bind:this={qrScansCanvas}></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h2>Google Map Redirects</h2>
+            <div class="chart">
+                <canvas bind:this={googleRedirectsCanvas}></canvas>
+            </div>
         </div>
     </div>
 
@@ -199,6 +331,13 @@
         margin-bottom: 1.5rem;
     }
 
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
     .stat-card, .chart-card, .reviews-card {
         background: rgba(255, 255, 255, 0.05);
         backdrop-filter: blur(10px);
@@ -260,5 +399,11 @@
         font-size: 1.25rem;
         font-weight: 600;
         margin-bottom: 1rem;
+    }
+
+    @media (max-width: 768px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
