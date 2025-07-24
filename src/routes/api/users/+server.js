@@ -187,6 +187,7 @@ export async function PUT({ request }) {
 }
 
 // Delete a user
+
 export async function DELETE({ request }) {
   const { id } = await request.json();
   
@@ -199,13 +200,18 @@ export async function DELETE({ request }) {
       if (userResult.rows.length > 0) {
         const uniqueId = userResult.rows[0].unique_id;
         
-        // Delete business auth entry
-        await client.query('DELETE FROM business_auth WHERE business_id = $1', [id]);
+        // Delete in the correct order to avoid foreign key constraint violations
         
-        // Delete feedback entries
+        // 1. Delete daily analytics entries first
+        await client.query('DELETE FROM daily_analytics WHERE unique_id = $1', [uniqueId]);
+        
+        // 2. Delete feedback entries
         await client.query('DELETE FROM feedback WHERE unique_id = $1', [uniqueId]);
         
-        // Delete user
+        // 3. Delete business auth entry
+        await client.query('DELETE FROM business_auth WHERE business_id = $1', [id]);
+        
+        // 4. Finally, delete the user
         await client.query('DELETE FROM users WHERE id = $1', [id]);
       }
       

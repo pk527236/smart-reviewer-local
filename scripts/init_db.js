@@ -53,16 +53,16 @@ async function initializeDatabase() {
         FOREIGN KEY (business_id) REFERENCES users(id) ON DELETE CASCADE
       );
       CREATE TABLE IF NOT EXISTS daily_analytics (
-       id SERIAL PRIMARY KEY,
-       unique_id UUID NOT NULL,
-       analytics_date DATE NOT NULL DEFAULT CURRENT_DATE,
-       qr_scans INTEGER DEFAULT 0,
-       google_redirects INTEGER DEFAULT 0,
-       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-       FOREIGN KEY (unique_id) REFERENCES users(unique_id),
-       UNIQUE(unique_id, analytics_date)
-       );
+      id SERIAL PRIMARY KEY,
+      unique_id UUID NOT NULL,
+      analytics_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      qr_scans INTEGER DEFAULT 0,
+      google_redirects INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (unique_id) REFERENCES users(unique_id) ON DELETE CASCADE,
+      UNIQUE(unique_id, analytics_date)
+      );
     `);
 
     await client.query(`
