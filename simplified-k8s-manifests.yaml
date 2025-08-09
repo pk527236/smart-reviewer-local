@@ -1,0 +1,357 @@
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: smart-reviewer
+  labels:
+    name: smart-reviewer
+
+---
+# ConfigMap for non-sensitive environment variables
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smart-reviewer-config
+  namespace: smart-reviewer
+data:
+  PGHOST: "postgresql-service"
+  PGDATABASE: "smart-reviewer"
+  PGPORT: "5432"
+  NODE_ENV: "production"
+  PORT: "3000"
+  PGSSLMODE: "disable"
+  # Add these additional SSL-related environment variables
+  PGSSL: "false"
+  DATABASE_SSL: "false"
+
+---
+# Secret for sensitive data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: smart-reviewer-secret
+  namespace: smart-reviewer
+type: Opaque
+data:
+  PGUSER: cGl5dXNo  # base64 encoded 'piyush'
+  PGPASSWORD: cGl5dXNo  # base64 encoded 'piyush'
+
+---
+# PostgreSQL PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  namespace: smart-reviewer
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: standard
+  hostPath:
+    path: /data/postgres
+
+---
+# PostgreSQL PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: smart-reviewer
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+# PostgreSQL Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: smart-reviewer
+  labels:
+    app: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGDATABASE
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: smart-reviewer-secret
+              key: PGUSER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: smart-reviewer-secret
+              key: PGPASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - piyush
+            - -d
+            - smart-reviewer
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - piyush
+            - -d
+            - smart-reviewer
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-service
+  namespace: smart-reviewer
+  labels:
+    app: postgresql
+spec:
+  selector:
+    app: postgresql
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+  type: ClusterIP
+
+---
+# Smart-Reviewer App Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smart-reviewer-app
+  namespace: smart-reviewer
+  labels:
+    app: smart-reviewer-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: smart-reviewer-app
+  template:
+    metadata:
+      labels:
+        app: smart-reviewer-app
+    spec:
+      initContainers:
+      - name: db-schema-setup
+        image: piyushkr07/smart-reviewer:latest
+        imagePullPolicy: Always
+        command: ["node", "scripts/init_db.js"]
+        env:
+        - name: PGHOST
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGHOST
+        - name: PGDATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGDATABASE
+        - name: PGPORT
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGPORT
+        - name: PGSSLMODE
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGSSLMODE
+        - name: PGSSL
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGSSL
+        - name: DATABASE_SSL
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: DATABASE_SSL
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: smart-reviewer-secret
+              key: PGUSER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: smart-reviewer-secret
+              key: PGPASSWORD
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      containers:
+      - name: smart-reviewer-app
+        image: piyushkr07/smart-reviewer:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PGHOST
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGHOST
+        - name: PGDATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGDATABASE
+        - name: PGPORT
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGPORT
+        - name: PGSSLMODE
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGSSLMODE
+        - name: PGSSL
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PGSSL
+        - name: DATABASE_SSL
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: DATABASE_SSL
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: smart-reviewer-secret
+              key: PGUSER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: smart-reviewer-secret
+              key: PGPASSWORD
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: NODE_ENV
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: smart-reviewer-config
+              key: PORT
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+
+---
+# Smart-Reviewer App Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: smart-reviewer-service
+  namespace: smart-reviewer
+  labels:
+    app: smart-reviewer-app
+spec:
+  selector:
+    app: smart-reviewer-app
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+
+---
+# Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smart-reviewer-ingress
+  namespace: smart-reviewer
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: smart-reviewer.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: smart-reviewer-service
+            port:
+              number: 80

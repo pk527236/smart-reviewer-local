@@ -1,34 +1,41 @@
-# Stage 1: Build
-FROM node:23.6.1 AS builder
+# Use Node.js 18 Alpine as base image
+FROM node:18-alpine
+
+# Set working directory
 WORKDIR /app
 
-# Pass GitHub token to install private packages
-ARG GITHUB_TOKEN
-RUN npm config set //npm.pkg.github.com/:_authToken=$GITHUB_TOKEN
-
-# Copy and install dependencies
+# Copy package.json and package-lock.json (if available)
 COPY package*.json ./
-RUN npm install
 
-# Copy app source
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy the rest of the application code
 COPY . .
 
-# Build the SvelteKit app using adapter-node
+# Build the application
 RUN npm run build
 
-# Stage 2: Production Image
-FROM node:23.6.1 AS runner
-WORKDIR /app
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S svelte -u 1001
 
-# Copy production build and dependencies
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
-COPY .env .env
+# Change ownership of the app directory
+RUN chown -R svelte:nodejs /app
 
-# Expose desired port
-ENV PORT=5173
-EXPOSE 5173
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
 
-# Start the app using adapter-node entrypoint
+# Expose the port the app runs on
+EXPOSE 3000
+
+# Switch to non-root user
+USER svelte
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
+
+# Start the application
 CMD ["node", "build"]
