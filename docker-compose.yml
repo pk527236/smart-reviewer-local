@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: smart-reviewer-db
+    environment:
+      POSTGRES_DB: smart-reviewer
+      POSTGRES_USER: piyush
+      POSTGRES_PASSWORD: piyush
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Use port 5433 on host to avoid conflict
+    networks:
+      - smart-reviewer-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U piyush -d smart-reviewer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Database initialization service
+  db-init:
+    build: .
+    container_name: smart-reviewer-db-init
+    environment:
+      - PGUSER=piyush
+      - PGHOST=postgres-db
+      - PGDATABASE=smart-reviewer
+      - PGPASSWORD=piyush
+      - PGPORT=5432
+      - NODE_ENV=production
+      - PGSSLMODE=disable
+      - PGSSL=false
+      - DATABASE_SSL=false
+    command: ["node", "scripts/init_db.js"]
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - smart-reviewer-network
+    restart: "no"  # Run once and exit
+
+  smart-reviewer-app:
+    build: .
+    container_name: smart-reviewer-app
+    environment:
+      - PGUSER=piyush
+      - PGHOST=postgres-db
+      - PGDATABASE=smart-reviewer
+      - PGPASSWORD=piyush
+      - PGPORT=5432
+      - NODE_ENV=production
+      - PORT=3000
+      - PGSSLMODE=disable
+      - PGSSL=false
+      - DATABASE_SSL=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    networks:
+      - smart-reviewer-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - ./logs:/app/logs  # Optional: Mount logs directory
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  smart-reviewer-network:
+    driver: bridge
