@@ -1,0 +1,70 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_CREDENTIALS = credentials('docker')   // DockerHub creds ID in Jenkins
+        GIT_CREDENTIALS_ID = 'github'                // GitHub creds ID in Jenkins
+        DOCKER_IMAGE = 'piyushkr07/smart-reviewer'    // DockerHub repo
+    }
+    stages {
+        stage('Clone Code') {
+            steps {
+                echo 'Cloning repository...'
+                git branch: 'main', 
+                    credentialsId: "${GIT_CREDENTIALS_ID}", 
+                    url: "https://github.com/pk527236/smart-reviewer-local.git"
+                echo 'Code cloning successful.'
+            }
+        }
+        
+        stage('Clean Environment') {
+            steps {
+                echo 'Cleaning up existing containers and volumes...'
+                sh '''
+                    docker compose down --volumes --remove-orphans || true
+                    docker system prune -f || true
+                '''
+            }
+        }
+        
+        stage('Deploy with Docker Compose') {
+            steps {
+                echo 'Deploying using docker-compose...'
+                sh '''
+                    # Build and start services
+                    docker compose up --build --detach
+                    
+                    # Wait for services to be healthy
+                    echo "Waiting for services to start..."
+                    sleep 30
+                    
+                    # Check service status
+                    docker compose ps
+                '''
+                echo 'Application deployed successfully.'
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                echo 'Performing health checks...'
+                sh '''
+                    # Wait for app to be ready
+                    timeout 60 bash -c 'until curl -f http://localhost:3000/health || curl -f http://localhost:3000/; do sleep 2; done'
+                '''
+                echo 'Health check passed.'
+            }
+        }
+    }
+    
+    post {
+        failure {
+            echo 'Pipeline failed! Checking logs...'
+            sh 'docker compose logs || true'
+        }
+        always {
+            echo 'Pipeline completed.'
+            // Uncomment if you want to clean up after each run
+            // sh 'docker compose down --volumes || true'
+        }
+    }
+}
